@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: fakt API
   version: "1.1.0"
-  description: "Job market data API: search, geo, recruitment patterns, events, watchlists, bulk export."
+  description: "Job market data API: search, geo, salary, recruitment patterns, events, watchlists, bulk export."
 servers:
   - url: https://fakt.no/api/v1
     description: Production
@@ -116,6 +116,18 @@ paths:
       summary: Market KPIs (Oslo-time day)
       responses:
         "200": { description: KPIs }
+  /market/salary:
+    get:
+      summary: Salary breakdown by category/occupation/county
+      parameters:
+        - { name: category, in: query, schema: { type: string }, description: case/plural-insensitive }
+        - { name: occupation, in: query, schema: { type: string } }
+        - { name: county, in: query, schema: { type: string }, description: county/city }
+        - { name: source, in: query, schema: { type: string, enum: [actual, estimated] } }
+        - { name: limit, in: query, schema: { type: integer, default: 25 } }
+      responses:
+        "200": { description: Median, p25/p75, min/max, sample size + distribution }
+        "403": { description: Requires an API key (Pro plan or higher) }
   /market/history:
     get:
       summary: Daily market history
@@ -128,6 +140,7 @@ paths:
       summary: Time-to-fill from measured intervals
       parameters:
         - { name: category, in: query, schema: { type: string } }
+        - { name: county, in: query, schema: { type: string } }
       responses:
         "200": { description: Stats }
   /usage:
