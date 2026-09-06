@@ -1,0 +1,158 @@
+openapi: 3.0.3
+info:
+  title: fakt API
+  version: "1.1.0"
+  description: Job market data API: search, geo, recruitment patterns, events, watchlists, bulk export.
+servers:
+  - url: https://fakt.no/api/v1
+    description: Production
+security:
+  - apiKey: []
+paths:
+  /jobs:
+    get:
+      summary: Search active jobs
+      parameters:
+        - { name: q, in: query, schema: { type: string }, description: full-text search }
+        - { name: county, in: query, schema: { type: string } }
+        - { name: category, in: query, schema: { type: string }, description: case/plural-insensitive }
+        - { name: postal, in: query, schema: { type: string, pattern: "^[0-9]{4}$" } }
+        - { name: radius_km, in: query, schema: { type: number } }
+        - { name: sort, in: query, schema: { type: string, enum: [newest, quality, distance] } }
+        - { name: limit, in: query, schema: { type: integer, default: 50 } }
+        - { name: offset, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: Jobs with optional distanceKm + geo }
+  /jobs/{id}:
+    get:
+      summary: Full enriched job
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Job detail with measured history }
+  /jobs/{id}/similar:
+    get:
+      summary: Similar jobs
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Similar jobs with similarity scores }
+  /employers:
+    get:
+      summary: Employer list
+      parameters:
+        - { name: q, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: Employers with open counts }
+  /employers/{name}:
+    get:
+      summary: Employer profile with registry + recruitment pattern
+      parameters:
+        - { name: name, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: Employer profile }
+  /recruitment:
+    get:
+      summary: Employer recruitment patterns (persistence score + evidence)
+      parameters:
+        - { name: sort, in: query, schema: { type: string } }
+        - { name: q, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: Patterns }
+  /recruitment/audit:
+    get:
+      summary: Algorithm validation (drift + signal distributions)
+      responses:
+        "200": { description: Audit }
+  /events:
+    get:
+      summary: Change-log events (keyset pagination)
+      parameters:
+        - { name: after, in: query, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: Events }
+  /stream:
+    get:
+      summary: SSE live stream of the change log
+      responses:
+        "200": { description: text/event-stream }
+  /watchlists:
+    get:
+      summary: Saved searches
+      responses:
+        "200": { description: Watchlists }
+    post:
+      summary: Create a saved search
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                q: { type: string }
+                postal: { type: string }
+                radius_km: { type: number }
+      responses:
+        "201": { description: Created }
+  /watchlists/{id}:
+    get:
+      summary: New jobs since last check
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200": { description: New jobs }
+    delete:
+      summary: Delete a saved search
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200": { description: Deleted }
+  /market:
+    get:
+      summary: Market KPIs (Oslo-time day)
+      responses:
+        "200": { description: KPIs }
+  /market/history:
+    get:
+      summary: Daily market history
+      parameters:
+        - { name: days, in: query, schema: { type: integer, default: 14 } }
+      responses:
+        "200": { description: History }
+  /market/timetofill:
+    get:
+      summary: Time-to-fill from measured intervals
+      parameters:
+        - { name: category, in: query, schema: { type: string } }
+      responses:
+        "200": { description: Stats }
+  /usage:
+    get:
+      summary: Traffic telemetry
+      responses:
+        "200": { description: Usage }
+  /export/jobs:
+    get:
+      summary: Bulk NDJSON export of jobs
+      responses:
+        "200": { description: application/x-ndjson }
+  /export/employers:
+    get:
+      summary: Bulk NDJSON export of employers
+      responses:
+        "200": { description: application/x-ndjson }
+  /export/events:
+    get:
+      summary: Bulk NDJSON export of the change log
+      responses:
+        "200": { description: application/x-ndjson }
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: X-API-Key
