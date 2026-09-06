@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: fakt API
   version: "1.1.0"
-  description: Job market data API: search, geo, recruitment patterns, events, watchlists, bulk export.
+  description: "Job market data API: search, geo, recruitment patterns, events, watchlists, bulk export."
 servers:
   - url: https://fakt.no/api/v1
     description: Production
