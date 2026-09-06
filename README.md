@@ -1,127 +1,210 @@
 # fakt API
 
-Offentlig API for norsk arbeidsmarkedsdata — stillinger, arbeidsgivere, lønn, rekrutteringsmønstre og markedsinnsikt.
+Public API for Norwegian labour-market data — job ads, employers, salary, recruitment patterns and market insights.
 
-> fakt observerer den offisielle **NAV Arbeidsplassen**-feeden for stillingsannonser kontinuerlig og bygger historikk over tid. Data kombineres med **SSB** (lønn/inntekt) og **Brønnøysundregistrene** (arbeidsgiverinfo). Alle tall er **observert**, ikke selvrapportert.
+> fakt continuously observes the official **NAV Arbeidsplassen** feed for job postings and builds history over time. Data is combined with **SSB** (salary / income) and the **Brønnøysundregistrene** (company registry). All figures are **observed**, not self-reported.
 
-- **OpenAPI 3.0:** [`openapi.yaml`](./openapi.yaml)
 - **Base URL:** `https://fakt.no/api/v1`
-- **Siste stillingsdata:** [fakt.no](https://fakt.no) · [Innsikt](https://fakt.no/insights)
+- **OpenAPI 3.0:** [`openapi.yaml`](./openapi.yaml)
+- **Interactive docs:** [fakt.no/api-docs](https://fakt.no/api-docs)
+- **Latest data:** [fakt.no](https://fakt.no) · [Innsikt](https://fakt.no/insights)
 
 ---
 
-## Kom i gang
-
-### 1. Få en API-nøkkel (valgfritt)
-
-API-en kjører i to moduser:
-
-| Modus | Autentisering | Begrensning |
-| --- | --- | --- |
-| **Demo (open)** | Ingen nøkkel | Read-only, per-IP døgnkvote (standard 50 kall/dag) |
-| **Pro (nøkkel)** | `X-API-Key` | Planbasert månedskvote, døgnkvote og funksjonstilgang |
-
-Opprett en nøkkel fra [fakt.no/dashboard](https://fakt.no/dashboard) (API-nøkler). Uten nøkkel kan du fortsatt bruke alle lese-endepunktene med demokvoten.
-
-### 2. Kall en endepunkt
+## Quick start
 
 ```bash
-# Demo (ingen nøkkel)
+curl -H "X-API-Key: YOUR_API_KEY_HERE" \
+  "https://fakt.no/api/v1/jobs?q=sykepleier&county=Oslo&limit=2"
+```
+
+<details>
+<summary>Example response</summary>
+
+```json
+{
+  "count": 2,
+  "total": 1477,
+  "offset": 0,
+  "limit": 2,
+  "sort": "newest",
+  "items": [
+    {
+      "id": "cmsx8av5o1hmc4lzdinoyw55w",
+      "title": "Sykehjemslege",
+      "employer": "Bjølsenhjemmet",
+      "employerId": "cmssolric07ebb8gfqd9ie0oo",
+      "location": "OSLO",
+      "category": "Allmennpraktiserende leger",
+      "occupation": "Allmennpraktiserende leger",
+      "employmentType": "Vikariat",
+      "publishedAt": "2026-09-05T05:05:28.473Z",
+      "salaryDisclosed": false,
+      "qualityScore": 55,
+      "tone": "mid"
+    }
+  ]
+}
+```
+</details>
+
+> **`YOUR_API_KEY_HERE` is a placeholder.** Replace it with a real key from your dashboard, or omit the header entirely to use the open **demo** tier.
+
+---
+
+## Authentication
+
+The API uses a single API key sent in the `X-API-Key` header.
+
+| Mode | How | Limit |
+| --- | --- | --- |
+| **Demo (no key)** | Call without a header | Read-only, per-IP **50 requests/day** (see [Rate limits](#rate-limits)) |
+| **Keyed** | Send `X-API-Key: <key>` | Plan-based monthly + daily quota |
+
+Create a key from [fakt.no/dashboard](https://fakt.no/dashboard) → **API keys**. Keys are shown once at issue time (stored hashed) — keep it secret.
+
+```bash
+# Demo (no key)
 curl "https://fakt.no/api/v1/jobs?q=sykepleier&limit=5"
 
-# Med API-nøkkel
-curl -H "X-API-Key: din_nøkkel" \
+# Keyed
+curl -H "X-API-Key: YOUR_API_KEY_HERE" \
   "https://fakt.no/api/v1/jobs?q=sykepleier&limit=5"
 ```
 
-### 3. Python
+---
+
+## Getting started
+
+1. **Get a key** (optional but recommended): create one from [fakt.no/dashboard](https://fakt.no/dashboard).
+2. **Call an endpoint** with `curl` (or any HTTP client) against `https://fakt.no/api/v1`.
+3. **Check your quota** at any time with [`GET /usage`](#endpoints).
+4. **Generate a client** from [`openapi.yaml`](./openapi.yaml) if you want typed SDKs.
+
+### Python
 
 ```python
 import requests
 
 BASE = "https://fakt.no/api/v1"
-HEADERS = {"X-API-Key": "din_nøkkel"}          # utelat for demo-modus
+HEADERS = {"X-API-Key": "YOUR_API_KEY_HERE"}   # omit the header for demo mode
 
 r = requests.get(f"{BASE}/jobs", headers=HEADERS, params={"q": "elektriker", "county": "Rogaland"})
 data = r.json()
-for job in data.get("jobs", []):
+for job in data.get("items", []):
     print(job["title"], "—", job.get("location"))
 ```
 
 ---
 
-## Endpunkter
+## Rate limits
 
-| Metode | Sti | Beskrivelse |
-| --- | --- | --- |
-| GET | `/jobs` | Søk i aktive stillinger (fulltekst, fylke, kategori, postnummer, radius) |
-| GET | `/jobs/{id}` | Enkeltannonse med målt historikk |
-| GET | `/jobs/{id}/similar` | Lignende stillinger med likhetsscore |
-| GET | `/employers` | Arbeidsgiverliste med åpne tellinger |
-| GET | `/employers/{name}` | Arbeidsgiverprofil med register- og rekrutteringsmønster |
-| GET | `/recruitment` | Rekrutteringsmønstre (persistensscore + bevis) |
-| GET | `/recruitment/audit` | Algoritmevalidering (drift + signalfordelinger) |
-| GET | `/events` | Endringslogg (keyset-paginering) |
-| GET | `/stream` | SSE-livestream av endringsloggen |
-| GET/POST | `/watchlists` | Lagrede søk |
-| GET/DELETE | `/watchlists/{id}` | Nye stillinger siden siste sjekk / slett søk |
-| GET | `/market` | Markedsoversikt (nye, fjernede, total, toppkategori/-fylke) |
-| GET | `/market/history` | Tidsserie for markedet |
-| GET | `/market/timetofill` | Tid-til-fylt for stillinger |
-| GET | `/usage` | Egen kvote- og bruksstatus |
-| GET | `/export/jobs` | Bulk-eksport av stillinger |
-| GET | `/export/employers` | Bulk-eksport av arbeidsgivere |
-| GET | `/export/events` | Bulk-eksport av endringslogg |
+Limits are enforced per key (per IP for demo). Plan values match the [fakt.no pricing](https://fakt.no) tiers.
 
-Full parameter- og responsspesifikasjon finnes i [`openapi.yaml`](./openapi.yaml) eller på [fakt.no/api-docs](https://fakt.no/api-docs).
+| Plan | Per minute | Per day | Per month | Endpoints |
+| --- | --- | --- | --- | --- |
+| **Demo** (no key) | 10 | 50 (per IP) | ~1,500 | Core (read-only) |
+| **Free** | 10 | 50 | 1,500 | Core |
+| **Pro** | 60 | 1,000 | 30,000 | Core + Market |
+| **Business** | 300 | 10,000 | 300,000 | Core + Market + Exports |
+| **Enterprise** | 1,000 | 100,000 | 3,000,000 | Core + Market + Exports |
+
+**Feature groups**
+
+- **Core** — `/jobs`, `/employers`, `/events` (available to every plan, including demo)
+- **Market** — salary and market-intelligence endpoints (`/market/*`, `/recruitment`)
+- **Exports** — bulk NDJSON export (`/export/*`)
+
+When a daily or monthly quota is exhausted the API returns `429`, with the relevant `X-*` headers (see [Response headers](#response-headers--errors)).
 
 ---
 
-## Vanlige spørringer
+## Endpoints
 
-**Siste stillinger innen en kategori:**
+| Method | Path | Description | Access |
+| --- | --- | --- | --- |
+| GET | `/jobs` | Search active jobs (FTS, county, category, employment type, salary, postal + radius) | Core |
+| GET | `/jobs/{id}` | Full enriched job: description, tags, salary + expected salary (SSB), history | Core |
+| GET | `/jobs/{id}/similar` | Recommended jobs based on occupation/category/location/skills | Core |
+| GET | `/employers` | Employer list with aggregates (open, salary share, avg quality) | Core |
+| GET | `/employers/{name}` | Employer profile: open jobs, monthly timeline, Brønnøysund registry + recruitment pattern | Core |
+| GET | `/events` | Change log (append-only event stream), keyset pagination | Core |
+| GET | `/stream` | SSE live stream of the change log | Core |
+| GET | `/market` | Market KPIs: active jobs, new today (Oslo time), salary share, repeats | Market |
+| GET | `/market/salary` | Salary breakdown by category/occupation/county: median, p25/p75, min/max, distribution | Market |
+| GET | `/market/history` | Point-in-time market history: active + new jobs per day | Market |
+| GET | `/market/timetofill` | Time-to-fill from measured intervals, by category and county | Market |
+| GET | `/recruitment` | Employer recruitment patterns (six explainable signals → persistence score) | Market |
+| GET | `/recruitment/audit` | Algorithm validation: drift check + signal distributions | Market |
+| GET/POST | `/watchlists` | List / create saved searches | Core |
+| GET/DELETE | `/watchlists/{id}` | New jobs since last check / delete a saved search | Core |
+| GET | `/usage` | Your quota & usage status | Core |
+| GET | `/export/jobs` | Bulk NDJSON export of jobs | Exports |
+| GET | `/export/employers` | Bulk NDJSON export of employers (incl. registry + patterns) | Exports |
+| GET | `/export/events` | Bulk NDJSON export of the change log | Exports |
+
+Full parameter and response schemas are in [`openapi.yaml`](./openapi.yaml) or at [fakt.no/api-docs](https://fakt.no/api-docs).
+
+---
+
+## Common queries
+
+**Newest jobs in a category:**
+
 ```bash
 curl "https://fakt.no/api/v1/jobs?category=Forsker&sort=newest&limit=10"
 ```
 
-**Markedsoversikt og historikk:**
+**Jobs near you:**
+
 ```bash
-curl "https://fakt.no/api/v1/market"
-curl "https://fakt.no/api/v1/market/history?limit=30"
+curl "https://fakt.no/api/v1/jobs?q=sykepleier&postal=0150&radius_km=10&sort=distance&limit=10"
 ```
 
-Lønnsstatistikk per yrke og arbeidsgiver finner du på [fakt.no/lonn](https://fakt.no/lonn) og i [fakt.no/rapport](https://fakt.no/rapport).
+**Market overview + history:**
 
-**Arbeidsgivere som ansetter mest:**
+```bash
+curl "https://fakt.no/api/v1/market"
+curl "https://fakt.no/api/v1/market/history?days=30"
+```
+
+**Employers hiring the most:**
+
 ```bash
 curl "https://fakt.no/api/v1/employers?sort=count&limit=10"
 ```
 
 ---
 
-## Svarhoder og feil
+## Response headers & errors
 
-API-en bruker standard HTTP-statuskoder. Ved feil returneres JSON med `error` (og noen ganger `expiresAt`/`used`/`quota`).
+The API uses standard HTTP status codes. Simple read endpoints return JSON arrays/objects; bulk exports return NDJSON (`application/x-ndjson`); the stream returns `text/event-stream`.
 
-| Status | Betydning |
+| Status | Meaning |
 | --- | --- |
 | `200` | OK |
-| `400` | Ugyldig forespørsel |
-| `401` | Ugyldig/utløpt `X-API-Key` |
-| `403` | Nøkkelen er utløpt |
-| `404` | Fant ikke ressursen |
-| `429` | Kvote brukt opp (månedlig eller daglig) |
+| `400` | Bad request |
+| `401` | Invalid / expired `X-API-Key` |
+| `403` | Key expired or endpoint not on your plan |
+| `404` | Resource not found |
+| `429` | Quota exhausted (monthly, daily or per-minute) |
 
-Relevante svarnagler: `X-Plan`, `X-Quota-Remaining`, `X-Quota-Limit`, `X-Daily-Remaining`, `X-Daily-Limit`.
+Response headers: `X-Plan`, `X-Quota-Limit`, `X-Quota-Remaining`, `X-Daily-Limit`, `X-Daily-Remaining`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`.
+
+Errors return JSON, e.g.:
+
+```json
+{ "error": "Demo limit reached (50 req/day per IP). Get an API key for full access" }
+```
 
 ---
 
-## Data & metodikk
+## Data & methodology
 
-- **Kilder:** NAV Arbeidsplassen, SSB, Brønnøysundregistrene.
-- **Metodikk og datakilder:** [fakt.no/metodikk](https://fakt.no/metodikk)
-- **Om fakt:** [fakt.no/about](https://fakt.no/about)
+- **Sources:** NAV Arbeidsplassen, SSB, Brønnøysundregistrene.
+- **Methodology & data sources:** [fakt.no/metodikk](https://fakt.no/metodikk)
+- **About fakt:** [fakt.no/about](https://fakt.no/about)
 
-## Lisens
+## License
 
-MIT — se [LICENSE](./LICENSE).
+MIT — see [`LICENSE`](./LICENSE).
