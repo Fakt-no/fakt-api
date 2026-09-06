@@ -67,10 +67,11 @@ for job in data.get("jobs", []):
 | GET/DELETE | `/watchlists/{id}` | Nye stillinger siden siste sjekk / slett søk |
 | GET | `/market` | Markedsoversikt (nye, fjernede, total, toppkategori/-fylke) |
 | GET | `/market/history` | Tidsserie for markedet |
-| GET | `/market/salary` | Lønnsdata per yrke/kategori |
 | GET | `/market/timetofill` | Tid-til-fylt for stillinger |
 | GET | `/usage` | Egen kvote- og bruksstatus |
-| GET | `/monitor/status` | Tjenestestatus |
+| GET | `/export/jobs` | Bulk-eksport av stillinger |
+| GET | `/export/employers` | Bulk-eksport av arbeidsgivere |
+| GET | `/export/events` | Bulk-eksport av endringslogg |
 
 Full parameter- og responsspesifikasjon finnes i [`openapi.yaml`](./openapi.yaml) eller på [fakt.no/api-docs](https://fakt.no/api-docs).
 
@@ -83,10 +84,13 @@ Full parameter- og responsspesifikasjon finnes i [`openapi.yaml`](./openapi.yaml
 curl "https://fakt.no/api/v1/jobs?category=Forsker&sort=newest&limit=10"
 ```
 
-**Lønn for et yrke:**
+**Markedsoversikt og historikk:**
 ```bash
-curl "https://fakt.no/api/v1/market/salary?category=Sykepleier"
+curl "https://fakt.no/api/v1/market"
+curl "https://fakt.no/api/v1/market/history?limit=30"
 ```
+
+Lønnsstatistikk per yrke og arbeidsgiver finner du på [fakt.no/lonn](https://fakt.no/lonn) og i [fakt.no/rapport](https://fakt.no/rapport).
 
 **Arbeidsgivere som ansetter mest:**
 ```bash
