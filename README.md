@@ -5,8 +5,7 @@ Public API for Norwegian labour-market data — job ads, employers, salary, recr
 > fakt continuously observes the official **NAV Arbeidsplassen** feed for job postings and builds history over time. Data is combined with **SSB** (salary / income) and the **Brønnøysundregistrene** (company registry). All figures are **observed**, not self-reported.
 
 - **Base URL:** `https://fakt.no/api/v1`
-- **OpenAPI 3.0:** [`openapi.yaml`](./openapi.yaml)
-- **Interactive docs:** [fakt.no/api-docs](https://fakt.no/api-docs)
+- **OpenAPI 3.0:** [`openapi.yaml`](./openapi.yaml) — the authoritative, machine-readable full reference
 - **Latest data:** [fakt.no](https://fakt.no) · [Innsikt](https://fakt.no/insights)
 
 ---
@@ -143,7 +142,7 @@ When a daily or monthly quota is exhausted the API returns `429`, with the relev
 | GET | `/export/employers` | Bulk NDJSON export of employers (incl. registry + patterns) | Exports |
 | GET | `/export/events` | Bulk NDJSON export of the change log | Exports |
 
-Full parameter and response schemas are in [`openapi.yaml`](./openapi.yaml) or at [fakt.no/api-docs](https://fakt.no/api-docs).
+Full parameter and response schemas are in [`openapi.yaml`](./openapi.yaml).
 
 ---
 
