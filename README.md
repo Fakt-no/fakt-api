@@ -167,10 +167,10 @@ curl "https://fakt.no/api/v1/market"
 curl "https://fakt.no/api/v1/market/history?days=30"
 ```
 
-**Employers hiring the most:**
+**Employer lookup** (returns employers A–Z by name — `/employers` has no `sort` parameter):
 
 ```bash
-curl "https://fakt.no/api/v1/employers?sort=count&limit=10"
+curl "https://fakt.no/api/v1/employers?q=sykehus&limit=10"
 ```
 
 ---
