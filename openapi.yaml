@@ -114,6 +114,7 @@ paths:
                 postal: { type: string }
                 radius_km: { type: number }
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "201": { description: Created }
   /watchlists/{id}:
     get:
