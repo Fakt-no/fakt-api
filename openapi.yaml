@@ -31,6 +31,18 @@ servers:
 security:
   - apiKey: []
 paths:
+  /:
+    get:
+      summary: Machine-readable catalog of this API
+      x-plan: "Free"
+      responses:
+        "200": { description: "version, groups, endpoints (each with its plan), quotas and metric definitions. Sends an ETag." }
+  /openapi:
+    get:
+      summary: This OpenAPI document
+      x-plan: "Free"
+      responses:
+        "200": { description: "The OpenAPI 3.0 specification as YAML. Sends an ETag; honour If-None-Match (304)." }
   /jobs:
     get:
       summary: Search active jobs
