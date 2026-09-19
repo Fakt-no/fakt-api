@@ -1,8 +1,15 @@
 openapi: 3.0.3
 info:
   title: fakt API
-  version: "1.1.0"
-  description: "Job market data API: search, geo, salary, recruitment patterns, events, watchlists, bulk export."
+  version: "1.2.0"
+  description: >-
+    Job market data API: search, geo, salary, recruitment patterns, events, watchlists, bulk export.
+    Authentication is mandatory: every request must send a valid key in the X-API-Key header.
+    There is no anonymous access. Create a free key (free plan, no payment details) at
+    https://fakt.no/dashboard/innstillinger. Requests without a key get 401 with code
+    "api_key_required" and the same instructions. Errors: 401 missing/invalid key,
+    403 key expired or endpoint not included in the plan, 429 quota, burst or export
+    concurrency limit. Bulk exports are charged by volume: 1 call per 25 rows returned.
 servers:
   - url: https://fakt.no/api/v1
     description: Production
@@ -22,6 +29,7 @@ paths:
         - { name: limit, in: query, schema: { type: integer, default: 50 } }
         - { name: offset, in: query, schema: { type: integer } }
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "200": { description: Jobs with optional distanceKm + geo }
   /jobs/{id}:
     get:
@@ -29,6 +37,7 @@ paths:
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "200": { description: Job detail with measured history }
   /jobs/{id}/similar:
     get:
@@ -36,6 +45,7 @@ paths:
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "200": { description: Similar jobs with similarity scores }
   /employers:
     get:
@@ -44,6 +54,7 @@ paths:
         - { name: q, in: query, schema: { type: string } }
         - { name: limit, in: query, schema: { type: integer } }
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "200": { description: Employers with open counts }
   /employers/{name}:
     get:
@@ -51,6 +62,7 @@ paths:
       parameters:
         - { name: name, in: path, required: true, schema: { type: string } }
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "200": { description: Employer profile }
   /recruitment:
     get:
@@ -60,11 +72,13 @@ paths:
         - { name: q, in: query, schema: { type: string } }
         - { name: limit, in: query, schema: { type: integer } }
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "200": { description: Patterns }
   /recruitment/audit:
     get:
       summary: Algorithm validation (drift + signal distributions)
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "200": { description: Audit }
   /events:
     get:
@@ -73,16 +87,19 @@ paths:
         - { name: after, in: query, schema: { type: string } }
         - { name: limit, in: query, schema: { type: integer } }
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "200": { description: Events }
   /stream:
     get:
       summary: SSE live stream of the change log
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "200": { description: text/event-stream }
   /watchlists:
     get:
       summary: Saved searches
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "200": { description: Watchlists }
     post:
       summary: Create a saved search
@@ -104,17 +121,20 @@ paths:
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "200": { description: New jobs }
     delete:
       summary: Delete a saved search
       parameters:
         - { name: id, in: path, required: true, schema: { type: integer } }
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "200": { description: Deleted }
   /market:
     get:
       summary: Market KPIs (Oslo-time day)
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "200": { description: KPIs }
   /market/salary:
     get:
@@ -126,14 +146,16 @@ paths:
         - { name: source, in: query, schema: { type: string, enum: [actual, estimated] } }
         - { name: limit, in: query, schema: { type: integer, default: 25 } }
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "200": { description: Median, p25/p75, min/max, sample size + distribution }
-        "403": { description: Requires an API key (Pro plan or higher) }
+        "403": { description: Requires the Pro plan or higher }
   /market/history:
     get:
       summary: Daily market history
       parameters:
         - { name: days, in: query, schema: { type: integer, default: 14 } }
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "200": { description: History }
   /market/timetofill:
     get:
@@ -142,28 +164,39 @@ paths:
         - { name: category, in: query, schema: { type: string } }
         - { name: county, in: query, schema: { type: string } }
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "200": { description: Stats }
   /usage:
     get:
       summary: Traffic telemetry
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "200": { description: Usage }
   /export/jobs:
     get:
-      summary: Bulk NDJSON export of jobs
+      summary: "Bulk NDJSON export of jobs (quota charged by volume: 1 call per 25 rows)"
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "200": { description: application/x-ndjson }
   /export/employers:
     get:
       summary: Bulk NDJSON export of employers
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "200": { description: application/x-ndjson }
   /export/events:
     get:
       summary: Bulk NDJSON export of the change log
       responses:
+        "401": { $ref: "#/components/responses/Unauthorized" }
         "200": { description: application/x-ndjson }
 components:
+  responses:
+    Unauthorized:
+      description: >-
+        Missing or invalid X-API-Key. This API has no anonymous access; create a free key
+        (no payment details) at https://fakt.no/dashboard/innstillinger and send it as the
+        X-API-Key header.
   securitySchemes:
     apiKey:
       type: apiKey

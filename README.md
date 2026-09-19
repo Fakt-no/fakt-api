@@ -47,35 +47,41 @@ curl -H "X-API-Key: YOUR_API_KEY_HERE" \
 ```
 </details>
 
-> **`YOUR_API_KEY_HERE` is a placeholder.** Replace it with a real key from your dashboard, or omit the header entirely to use the open **demo** tier.
+> **`YOUR_API_KEY_HERE` is a placeholder.** Replace it with a real key from your dashboard. Every request needs a key — there is no anonymous access.
 
 ---
 
 ## Authentication
 
-The API uses a single API key sent in the `X-API-Key` header.
+The API uses a single API key sent in the `X-API-Key` header. **A key is required for
+every request — there is no anonymous access.** A request without a key (or with an invalid
+or expired one) gets `401` with code `api_key_required` and instructions for creating one.
+Only `GET /api/v1` (the catalog) and `GET /api/v1/openapi` are public metadata, so a new
+caller can discover how to get a key.
 
-| Mode | How | Limit |
-| --- | --- | --- |
-| **Demo (no key)** | Call without a header | Read-only, per-IP **50 requests/day** (see [Rate limits](#rate-limits)) |
-| **Keyed** | Send `X-API-Key: <key>` | Plan-based monthly + daily quota |
+| How | Limit |
+| --- | --- |
+| `X-API-Key: <key>` (required) | Plan-based monthly + daily quota and a per-plan per-minute burst limit (see [Rate limits](#rate-limits)) |
 
-Create a key from [fakt.no/dashboard](https://fakt.no/dashboard) → **API keys**. Keys are shown once at issue time (stored hashed) — keep it secret.
+The **Free** plan costs nothing and requires **no payment details**: create an account at
+[fakt.no/signup](https://fakt.no/signup), then create a key from
+[fakt.no/dashboard/innstillinger](https://fakt.no/dashboard/innstillinger) → **API keys**.
+Keys are shown once at issue time (stored hashed) — keep it secret.
 
 ```bash
-# Demo (no key)
-curl "https://fakt.no/api/v1/jobs?q=sykepleier&limit=5"
-
-# Keyed
+# Keyed (the only way to call the API)
 curl -H "X-API-Key: YOUR_API_KEY_HERE" \
   "https://fakt.no/api/v1/jobs?q=sykepleier&limit=5"
+
+# Without a key -> 401 {"error":"API key required (X-API-Key). This API has no anonymous access.", "code":"api_key_required", ...}
+curl -i "https://fakt.no/api/v1/jobs?q=sykepleier&limit=5"
 ```
 
 ---
 
 ## Getting started
 
-1. **Get a key** (optional but recommended): create one from [fakt.no/dashboard](https://fakt.no/dashboard).
+1. **Get a key** (required — free, no payment details): create one from [fakt.no/dashboard/innstillinger](https://fakt.no/dashboard/innstillinger).
 2. **Call an endpoint** with `curl` (or any HTTP client) against `https://fakt.no/api/v1`.
 3. **Check your quota** at any time with [`GET /usage`](#endpoints).
 4. **Generate a client** from [`openapi.yaml`](./openapi.yaml) if you want typed SDKs.
@@ -86,7 +92,7 @@ curl -H "X-API-Key: YOUR_API_KEY_HERE" \
 import requests
 
 BASE = "https://fakt.no/api/v1"
-HEADERS = {"X-API-Key": "YOUR_API_KEY_HERE"}   # omit the header for demo mode
+HEADERS = {"X-API-Key": "YOUR_API_KEY_HERE"}   # required; free key from the dashboard
 
 r = requests.get(f"{BASE}/jobs", headers=HEADERS, params={"q": "elektriker", "county": "Rogaland"})
 data = r.json()
@@ -98,11 +104,15 @@ for job in data.get("items", []):
 
 ## Rate limits
 
-Limits are enforced per key (per IP for demo). Plan values match the [fakt.no pricing](https://fakt.no) tiers.
+Limits are enforced per key. Plan values match the [fakt.no pricing](https://fakt.no) tiers.
+
+Bulk exports (`/export/*`) are charged **by volume, not per request**: every 25 rows returned
+cost one call of quota (rounded up, minimum 1). A full-corpus export of ~13,600 jobs is
+therefore ~546 calls, not 1. Exports are also capped in concurrency — a second export on the
+same key, or a third server-wide, gets `429` with `Retry-After`.
 
 | Plan | Per minute | Per day | Per month | Endpoints |
 | --- | --- | --- | --- | --- |
-| **Demo** (no key) | 10 | 50 (per IP) | ~1,500 | Core (read-only) |
 | **Free** | 10 | 50 | 1,500 | Core |
 | **Pro** | 60 | 1,000 | 30,000 | Core + Market |
 | **Business** | 300 | 10,000 | 300,000 | Core + Market + Exports |
@@ -110,11 +120,13 @@ Limits are enforced per key (per IP for demo). Plan values match the [fakt.no pr
 
 **Feature groups**
 
-- **Core** — `/jobs`, `/employers`, `/events` (available to every plan, including demo)
+- **Core** — `/jobs`, `/employers`, `/events` (available to every plan, starting with Free)
 - **Market** — salary and market-intelligence endpoints (`/market/*`, `/recruitment`)
 - **Exports** — bulk NDJSON export (`/export/*`)
 
-When a daily or monthly quota is exhausted the API returns `429`, with the relevant `X-*` headers (see [Response headers](#response-headers--errors)).
+When a daily or monthly quota, the per-minute burst limit or the export concurrency limit is
+reached the API returns `429`, with the relevant `X-*` headers plus `Retry-After` for exports
+(see [Response headers](#response-headers--errors)).
 
 ---
 
@@ -183,17 +195,26 @@ The API uses standard HTTP status codes. Simple read endpoints return JSON array
 | --- | --- |
 | `200` | OK |
 | `400` | Bad request |
-| `401` | Invalid / expired `X-API-Key` |
+| `401` | Missing `X-API-Key` (`code: api_key_required`) or invalid/revoked key |
 | `403` | Key expired or endpoint not on your plan |
 | `404` | Resource not found |
 | `429` | Quota exhausted (monthly, daily or per-minute) |
 
-Response headers: `X-Plan`, `X-Quota-Limit`, `X-Quota-Remaining`, `X-Daily-Limit`, `X-Daily-Remaining`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`.
+Response headers: `X-Plan`, `X-Quota-Limit`, `X-Quota-Remaining`, `X-Daily-Limit`,
+`X-Daily-Remaining` (keyed calls), `X-Key-Required: true` (the keyless 401) and
+`X-Export-Rows` / `X-Export-Units` (bulk exports).
 
 Errors return JSON, e.g.:
 
 ```json
-{ "error": "Demo limit reached (50 req/day per IP). Get an API key for full access" }
+{
+  "error": "API key required (X-API-Key). This API has no anonymous access.",
+  "code": "api_key_required",
+  "howTo": "Create a free account at https://fakt.no/signup (no payment required), create an API key on your dashboard at https://fakt.no/dashboard/innstillinger, then send it as the X-API-Key header.",
+  "signup": "https://fakt.no/signup",
+  "dashboard": "https://fakt.no/dashboard/innstillinger",
+  "catalog": "https://fakt.no/api/v1"
+}
 ```
 
 ---
