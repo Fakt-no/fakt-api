@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: fakt API
-  version: "1.3.0"
+  version: "1.4.0"
   description: >-
     Job market data API: search, geo, recruitment patterns, events, watchlists, bulk export.
     Authentication is mandatory: every request must send a valid key in the X-API-Key header.
@@ -9,7 +9,9 @@ info:
     https://fakt.no/dashboard/innstillinger. Requests without a key get 401 with code
     "api_key_required" and the same instructions. Errors: 401 missing/invalid key,
     403 key expired or endpoint not included in the plan, 429 quota, burst or export
-    concurrency limit. Bulk exports are charged by volume: 1 call per 25 rows returned.
+    concurrency limit. The per-plan burst limit is counted per API key; a separate
+    per-IP wall (1200/min across all keys by default) answers 429 with code
+    "rate_limited_per_ip" and only trips for key rotation from one address. Bulk exports are charged by volume: 1 call per 25 rows returned.
     Plans: Free (core), Pro (+ market analytics), Business (+ recruitment analytics and
     bulk exports), Enterprise. Every operation states its minimum plan in x-plan.
     Metric definitions: an ad DISCLOSES SALARY when the salary parser accepted its NAV
@@ -19,9 +21,10 @@ info:
     are the advertised monthly band; salaryEstimated* is Fakt's model estimate.
     aiMentions counts ads whose own text mentions AI/KI terms -- it is not an
     AI-authorship signal. Collection history starts 2026-08-11; /market/history serves
-    up to 120 days. GET /, /openapi, /market, /status and /changelog send an ETag and
-    honour If-None-Match (304). Browser integrations must be allow-listed (CORS) by the
-    operator via V1_CORS_ORIGINS.
+    up to 120 days. GET /, /openapi, /market and /changelog send an ETag and honour
+    If-None-Match (304); /status returns a fresh body (servedAt + database latency) on
+    every call, so it is not 304-cacheable. Browser integrations must be allow-listed
+    (CORS) by the operator via V1_CORS_ORIGINS.
 servers:
   - url: https://fakt.no/api/v1
     description: Production
@@ -49,12 +52,12 @@ paths:
   /jobs/{id}:
     get:
       summary: Full enriched job
-      x-plan: "Free (salary block: Pro)"
+      x-plan: "Free (salary estimate: Pro)"
       parameters:
         - { name: id, in: path, required: true, schema: { type: string } }
       responses:
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "200": { description: Job detail with measured history }
+        "200": { description: "Job detail with measured history. Advertised salary (salaryDisclosed, salaryText, salaryActualText, salaryMin/salaryMax) is returned on every plan, same as /jobs. Fakt's model estimate (salaryBenchmark, salaryEstimatedMin/Median/Max) is present only when salaryEstimatesAvailable is true (Market plan)." }
   /jobs/{id}/similar:
     get:
       summary: Similar jobs
@@ -237,7 +240,7 @@ paths:
       summary: API and data-pipeline health (no key required)
       x-plan: "Free"
       responses:
-        "200": { description: "status ok|degraded|down, database latency, NAV feed freshness, version" }
+        "200": { description: "status ok|degraded|down, database latency, NAV feed freshness, version. Sends an ETag, but the body changes on every call (servedAt, latency), so it is not 304-cacheable." }
   /changelog:
     get:
       summary: API changelog (no key required)

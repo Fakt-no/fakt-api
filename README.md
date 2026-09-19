@@ -106,6 +106,11 @@ for job in data.get("items", []):
 
 Limits are enforced per key. Plan values match the [fakt.no pricing](https://fakt.no) tiers.
 
+The per-minute burst limit is counted **per API key**, so several keys behind one office/NAT
+address each get their own bucket. A separate, deliberately high per-IP wall (1,200 requests
+per minute across all keys by default) additionally guards against one address rotating through
+many keys, and answers `429 {"code":"rate_limited_per_ip"}`.
+
 Bulk exports (`/export/*`) are charged **by volume, not per request**: every 25 rows returned
 cost one call of quota (rounded up, minimum 1). A full-corpus export of ~13,600 jobs is
 therefore ~550 calls, not 1. Exports are also capped in concurrency — a second export on the
@@ -123,7 +128,9 @@ same key, or a third server-wide, gets `429` with `Retry-After`.
 - **Core** — `/jobs`, `/employers`, `/events`, `/watchlists`, `/status`, `/changelog`
   (available to every plan, starting with Free)
 - **Market** — salary and market analytics (`/market`, `/market/salary`, `/market/history`,
-  `/market/timetofill`) and the salary block of `/jobs/{id}`
+  `/market/timetofill`) and Fakt's model salary estimate (`salaryEstimatedMin/Median/Max`,
+  `salaryBenchmark`) on `/jobs/{id}`. The *advertised* salary of an individual ad is Core: it is
+  returned by `/jobs` and `/jobs/{id}` on every plan.
 - **Recruitment** — employer recruitment analytics (`/recruitment`, `/recruitment/audit`, and
   the `recruitment` block of `/employers/{name}`)
 - **Exports** — bulk export (`/export/*`), NDJSON or CSV
@@ -141,8 +148,8 @@ reached the API returns `429`, with the relevant `X-*` headers plus `Retry-After
 
 | Method | Path | Description | Access |
 | --- | --- | --- | --- |
-| GET | `/jobs` | Search active jobs (FTS, county, category, employment type, salary, postal + radius). Keyset cursor via `nextCursor` / `?after=` | Core |
-| GET | `/jobs/{id}` | Full enriched job: description, tags, history. Salary block (advertised band, estimate, benchmark, confidence) requires Pro; otherwise `salaryAvailable: false` | Core / **Pro** |
+| GET | `/jobs` | Search active jobs (FTS, county, category, employment type, salary, postal + radius). Response carries the advertised salary band (`salaryMin`/`salaryMax`/`salaryDisclosed`). Keyset cursor via `nextCursor` / `?after=` | Core |
+| GET | `/jobs/{id}` | Full enriched job: description, tags, history, advertised salary (`salaryDisclosed`, `salaryText`, `salaryActualText`, `salaryMin`/`salaryMax` — every plan, identical to `/jobs`). Fakt's model estimate (`salaryEstimatedMin/Median/Max`, `salaryBenchmark`) requires Pro; `salaryEstimatesAvailable` says whether it is present | Core / **Pro** for the estimate |
 | GET | `/jobs/{id}/similar` | Recommended jobs based on occupation/category/location/skills | Core |
 | GET | `/employers` | Employer list: id, name, orgNumber, number of open ads | Core |
 | GET | `/employers/{name}` | Employer profile: open jobs, monthly timeline, salary share, Brønnøysund registry. `recruitment` (score + evidence) requires Business (`recruitmentAvailable` says whether it is present) | Core / **Business** |
@@ -215,8 +222,10 @@ Response headers: `X-Plan`, `X-Quota-Limit`, `X-Quota-Remaining`, `X-Daily-Limit
 `X-Export-Concurrency-Limit` and `Retry-After` (export concurrency) and
 `X-Required-Feature` (a `403` for a plan the key does not have).
 
-`GET /`, `/openapi`, `/market`, `/status` and `/changelog` send a weak `ETag` and honour
-`If-None-Match` with `304 Not Modified`. `Cache-Control` on v1 responses is `private`, so no
+`GET /`, `/openapi`, `/market` and `/changelog` send a weak `ETag` and honour
+`If-None-Match` with `304 Not Modified`. `GET /status` also sends an `ETag`, but its body
+contains `servedAt` and a live database latency and therefore changes on every call, so it is
+not 304-cacheable. `Cache-Control` on v1 responses is `private`, so no
 shared cache can mix two keys' quota headers.
 
 **Browser use (CORS).** Cross-origin access is off unless the operator has allow-listed your
