@@ -144,7 +144,7 @@ reached the API returns `429`, with the relevant `X-*` headers plus `Retry-After
 | GET | `/jobs` | Search active jobs (FTS, county, category, employment type, salary, postal + radius). Keyset cursor via `nextCursor` / `?after=` | Core |
 | GET | `/jobs/{id}` | Full enriched job: description, tags, history. Salary block (advertised band, estimate, benchmark, confidence) requires Pro; otherwise `salaryAvailable: false` | Core / **Pro** |
 | GET | `/jobs/{id}/similar` | Recommended jobs based on occupation/category/location/skills | Core |
-| GET | `/employers` | Employer list with aggregates (open, salary share, avg quality) | Core |
+| GET | `/employers` | Employer list: id, name, orgNumber, number of open ads | Core |
 | GET | `/employers/{name}` | Employer profile: open jobs, monthly timeline, salary share, Brønnøysund registry. `recruitment` (score + evidence) requires Business (`recruitmentAvailable` says whether it is present) | Core / **Business** |
 | GET | `/events` | Change log (append-only event stream), keyset pagination | Core |
 | GET | `/stream` | Disabled — returns `410 Gone`. Use `/events` | — |
