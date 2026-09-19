@@ -1,19 +1,32 @@
 openapi: 3.0.3
 info:
   title: fakt API
-  version: "1.4.0"
+  version: "1.5.0"
   description: >-
     Job market data API: search, geo, recruitment patterns, events, watchlists, bulk export.
     Authentication is mandatory: every request must send a valid key in the X-API-Key header.
     There is no anonymous access. Create a free key (free plan, no payment details) at
     https://fakt.no/dashboard/innstillinger. Requests without a key get 401 with code
     "api_key_required" and the same instructions. Errors: 401 missing/invalid key,
-    403 key expired or endpoint not included in the plan, 429 quota, burst or export
-    concurrency limit. The per-plan burst limit is counted per API key; a separate
+    403 key expired or endpoint not included in the plan, 429 quota, burst, export
+    concurrency or record-exposure limit. The per-plan burst limit is counted per API key; a separate
     per-IP wall (1200/min across all keys by default) answers 429 with code
     "rate_limited_per_ip" and only trips for key rotation from one address. Bulk exports are charged by volume: 1 call per 25 rows returned.
+    EXPOSURE METERING: every key is metered on UNIQUE RECORDS DELIVERED PER CUSTOMER ACCOUNT
+    per calendar month -- unique job ids, unique employer ids, event rows and ad texts are
+    counted separately (see x-exposure). All keys of one account share one budget, so more keys
+    do not add allowance; re-requesting an already-delivered record consumes nothing. Exceeding
+    a budget is 429 { code: "record_exposure_limit" }. A page is at most 100 records; an
+    oversized ?limit= is 400 { code: "limit_too_large" } (never a silent truncation). /jobs,
+    /employers and /events require at least one meaningful filter on a fresh call (400
+    { code: "filters_required" }); cursors are opaque, signed, account-bound and expire after
+    24 h. LIMITATION: if Fakt returns a raw record, Fakt cannot prevent the customer from
+    storing it -- the protection limits cumulative raw-record exposure, it does not make
+    copying impossible. Aggregates and derived intelligence are not metered.
     Plans: Free (core), Pro (+ market analytics), Business (+ recruitment analytics and
-    bulk exports), Enterprise. Every operation states its minimum plan in x-plan.
+    bounded, window-scoped bulk exports), Enterprise (negotiated; an approved data licence
+    removes the budgets and allows the unrestricted full-dataset export). Every operation
+    states its minimum plan in x-plan.
     Metric definitions: an ad DISCLOSES SALARY when the salary parser accepted its NAV
     salary field (salaryActualText) or a normalized monthly-FTE figure exists
     (salaryActualMin/Max inside 15 000-150 000 NOK/month). Job.salaryDisclosed and
@@ -51,16 +64,20 @@ paths:
         - { name: q, in: query, schema: { type: string }, description: full-text search }
         - { name: county, in: query, schema: { type: string } }
         - { name: category, in: query, schema: { type: string }, description: case/plural-insensitive }
+        - { name: occupation, in: query, schema: { type: string }, description: case/plural-insensitive }
+        - { name: employerId, in: query, schema: { type: string } }
+        - { name: publishedAfter, in: query, schema: { type: string, format: date }, description: ISO-8601 date window }
         - { name: postal, in: query, schema: { type: string, pattern: "^[0-9]{4}$" } }
         - { name: radius_km, in: query, schema: { type: number } }
         - { name: sort, in: query, schema: { type: string, enum: [newest, quality, distance] } }
-        - { name: limit, in: query, schema: { type: integer, default: 50 } }
-        - { name: offset, in: query, schema: { type: integer } }
-        - { name: after, in: query, schema: { type: string }, description: keyset cursor from nextCursor; default sort (newest) only }
+        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 100 } }
+        - { name: offset, in: query, schema: { type: integer, maximum: 1000 } }
+        - { name: after, in: query, schema: { type: string }, description: signed, account-bound keyset cursor from nextCursor (24 h TTL); default sort (newest) only }
       responses:
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "200": { description: "Jobs with optional distanceKm + geo, and nextCursor for the next page" }
-        "400": { description: Invalid cursor, or after= with sort=quality|distance }
+        "200": { description: "Jobs with optional distanceKm + geo, and nextCursor for the next page. Sends X-Exposure-Job-* headers." }
+        "400": { description: "limit_too_large, invalid_limit, filters_required, offset_too_deep, cursor_invalid|cursor_expired|cursor_wrong_account, or after= with sort=quality|distance" }
+        "429": { description: "record_exposure_limit (account budget for the month) or enumeration_suspected" }
   /jobs/{id}:
     get:
       summary: Full enriched job
@@ -81,14 +98,19 @@ paths:
         "200": { description: Similar jobs with similarity scores }
   /employers:
     get:
-      summary: Employer list
+      summary: Employer search (a filter is required)
       x-plan: "Free"
       parameters:
-        - { name: q, in: query, schema: { type: string } }
-        - { name: limit, in: query, schema: { type: integer } }
+        - { name: q, in: query, schema: { type: string }, description: employer name contains }
+        - { name: orgNumber, in: query, schema: { type: string } }
+        - { name: county, in: query, schema: { type: string }, description: employers with a live ad in this county/city }
+        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 100 } }
+        - { name: after, in: query, schema: { type: string }, description: signed account-bound cursor from nextCursor }
       responses:
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "200": { description: Employers with open counts }
+        "200": { description: Employers with open counts and nextCursor }
+        "400": { description: "filters_required (none of q, orgNumber, county), limit_too_large, offset_too_deep, cursor_*" }
+        "429": { description: "record_exposure_limit (employer budget) or enumeration_suspected" }
   /employers/{name}:
     get:
       summary: Employer profile with registry + recruitment pattern
@@ -105,10 +127,12 @@ paths:
       parameters:
         - { name: sort, in: query, schema: { type: string } }
         - { name: q, in: query, schema: { type: string } }
-        - { name: limit, in: query, schema: { type: integer } }
+        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 100 } }
+        - { name: offset, in: query, schema: { type: integer, maximum: 1000 } }
       responses:
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "200": { description: Patterns }
+        "200": { description: "Patterns with per-employer signals + evidence (the model's own weights are no longer returned). Sends X-Exposure-Employer-* headers." }
+        "429": { description: "record_exposure_limit (employer budget) or enumeration_suspected" }
   /recruitment/audit:
     get:
       summary: Algorithm validation (drift + signal distributions)
@@ -118,13 +142,16 @@ paths:
         "200": { description: Audit }
   /events:
     get:
-      summary: Change-log events (keyset pagination)
+      summary: Change-log events (signed keyset pagination; a filter is required)
       x-plan: "Free"
       parameters:
-        - { name: after, in: query, schema: { type: string } }
-        - { name: limit, in: query, schema: { type: integer } }
+        - { name: after, in: query, schema: { type: string }, description: signed, account-bound cursor from nextCursor (24 h TTL) }
+        - { name: event, in: query, schema: { type: string }, description: "event type: JOB_CREATED, JOB_UPDATED, JOB_FIRST_SEEN, JOB_EXPIRED, JOB_REMOVED, JOB_REPOSTED, JOB_DUPLICATE, JOB_RECURRING_POSITION, JOB_REACTIVATED (anything else -> 400 invalid_event)" }
+        - { name: since, in: query, schema: { type: string, format: date-time }, description: ISO-8601 window }
+        - { name: limit, in: query, schema: { type: integer, default: 50, maximum: 100 } }
       responses:
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { description: "record_exposure_limit (event budget) or enumeration_suspected" }
         "200": { description: Events }
   /stream:
     get:
@@ -214,38 +241,48 @@ paths:
         "200": { description: Stats }
   /usage:
     get:
-      summary: Traffic telemetry
+      summary: Traffic telemetry + your account's record-exposure budget
       x-plan: "Free"
       responses:
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "200": { description: Usage }
+        "200": { description: "Per-endpoint request counters plus an exposure block (unique jobs/employers/events/adTexts used this month, shared by every key of the account)." }
   /export/jobs:
     get:
-      summary: "Bulk export of jobs, NDJSON or CSV (quota charged by volume: 1 call per 25 rows)"
+      summary: "Bounded job export, NDJSON or CSV (quota charged by volume: 1 call per 25 rows)"
       x-plan: "Business"
       parameters:
-        - { name: limit, in: query, schema: { type: integer, default: 50000 }, description: "rows, max 100000" }
-        - { name: include, in: query, schema: { type: string }, description: "comma-separated opt-ins: description, salaryEstimated, salaryActualText, aiMentions" }
+        - { name: limit, in: query, schema: { type: integer, default: 1000, maximum: 1000 }, description: "rows; max 1000 self-service, 100000 with a data licence" }
+        - { name: include, in: query, schema: { type: string }, description: "comma-separated opt-ins: description (data licence only), salaryEstimated, salaryActualText, aiMentions" }
         - { name: format, in: query, schema: { type: string, enum: [ndjson, csv], default: ndjson } }
-        - { name: updatedSince, in: query, schema: { type: string, format: date-time }, description: "keep ads whose NAV source timestamp is newer; ordered ascending" }
+        - { name: updatedSince, in: query, schema: { type: string, format: date-time }, description: "REQUIRED without a data licence: ISO-8601; keep ads whose NAV source timestamp is newer, ordered ascending so the last row is the next cursor" }
       responses:
         "401": { $ref: "#/components/responses/Unauthorized" }
-        "400": { description: Unknown include field, unsupported format or bad updatedSince }
-        "429": { description: Quota or export concurrency limit }
-        "200": { description: "application/x-ndjson or text/csv; X-Export-Rows / X-Export-Units headers" }
+        "400": { description: "limit_too_large (maxLicensedRows), export_window_required (updatedSince missing), unknown include field, unsupported format or bad updatedSince" }
+        "403": { description: "field_requires_data_license (include=description without an approved data licence)" }
+        "429": { description: Quota, export concurrency, record_exposure_limit or enumeration_suspected }
+        "200": { description: "application/x-ndjson or text/csv; X-Export-Rows / X-Export-Units / X-Export-Max-Rows / X-Export-Data-License headers" }
   /export/employers:
     get:
-      summary: "Bulk NDJSON export of employers (quota charged by volume: 1 call per 25 rows)"
+      summary: "Bounded NDJSON employer export (quota charged by volume: 1 call per 25 rows)"
       x-plan: "Business"
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, default: 1000, maximum: 1000 }, description: "rows; max 1000 self-service, 100000 with a data licence" }
       responses:
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "400": { description: "limit_too_large (maxLicensedRows)" }
+        "429": { description: Quota, export concurrency, record_exposure_limit or enumeration_suspected }
         "200": { description: application/x-ndjson }
   /export/events:
     get:
-      summary: "Bulk NDJSON export of the change log (quota charged by volume: 1 call per 25 rows)"
+      summary: "Bounded NDJSON change-log export (quota charged by volume: 1 call per 25 rows)"
       x-plan: "Business"
+      parameters:
+        - { name: since, in: query, schema: { type: string, format: date-time }, description: ISO-8601 window }
+        - { name: limit, in: query, schema: { type: integer, default: 1000, maximum: 1000 }, description: "rows; max 1000 self-service, 100000 with a data licence" }
       responses:
         "401": { $ref: "#/components/responses/Unauthorized" }
+        "400": { description: "limit_too_large (maxLicensedRows) or invalid since" }
+        "429": { description: Quota, export concurrency, record_exposure_limit or enumeration_suspected }
         "200": { description: application/x-ndjson }
   /status:
     get:
@@ -271,3 +308,30 @@ components:
       type: apiKey
       in: header
       name: X-API-Key
+x-exposure:
+  rule: >-
+    Unique records delivered per customer ACCOUNT per calendar month, counted separately for
+    jobs, employers, event rows and ad texts. Shared by every API key of the account.
+    Re-requesting an already-delivered record consumes nothing. Aggregates are not metered.
+  budgets:
+    free: { jobs: 750, employers: 500, events: 1000, adTexts: 100 }
+    pro: { jobs: 4000, employers: 2500, events: 20000, adTexts: 500 }
+    business: { jobs: 12000, employers: 8000, events: 100000, adTexts: 5000 }
+    enterprise: { jobs: 60000, employers: 40000, events: 300000, adTexts: 25000 }
+    enterpriseDataLicense: unlimited
+  exceeded: '429 { code: "record_exposure_limit", kind, used, limit, resets }'
+  headers: "X-Exposure-<Kind>-Used / -Limit / -Remaining, X-Exposure-Blocked, X-Exposure-Reset"
+  pageMaxRecords: 100
+  maxOffset: 1000
+  cursorTtlMinutes: 1440
+  antiEnumeration: >-
+    429 { code: "enumeration_suspected", signals, retryAfterSeconds } when several independent
+    harvesting signals co-occur (cursor walking, filter-dimension sweeps, repeated broad
+    queries, overlapping queries). One signal never throttles a normal customer.
+  limitation: >-
+    If Fakt returns a raw record to a customer, Fakt cannot prevent the customer from storing
+    it. Protection comes from limiting cumulative raw-record exposure.
+  exports: >-
+    Self-service: max 1000 rows per request, ?updatedSince= required for jobs,
+    include=description needs a data licence. Unrestricted full-dataset export:
+    Enterprise with an approved data licence (up to 100 000 rows), licensed separately.
