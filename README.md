@@ -5,7 +5,7 @@ Public API for Norwegian labour-market data, job ads, employers, salary, recruit
 > fakt continuously observes the official **NAV Arbeidsplassen** feed for job postings and builds history over time. Data is combined with **SSB** (salary / income) and the **Brønnøysundregistrene** (company registry). All figures are **observed**, not self-reported.
 
 - **Base URL:** `https://fakt.no/api/v1`
-- **OpenAPI 3.0:** [`openapi.yaml`](./openapi.yaml) — the authoritative, machine-readable full reference
+- **OpenAPI 3.0:** [`openapi.yaml`](./openapi.yaml)  the authoritative, machine-readable full reference
 - **Latest data:** [fakt.no](https://fakt.no) · [Innsikt](https://fakt.no/insights)
 
 ---
@@ -54,7 +54,7 @@ curl -H "X-API-Key: YOUR_API_KEY_HERE" \
 ## Authentication
 
 The API uses a single API key sent in the `X-API-Key` header. **A key is required for
-every request — there is no anonymous access.** A request without a key (or with an invalid
+every request, there is no anonymous access.** A request without a key (or with an invalid
 or expired one) gets `401` with code `api_key_required` and instructions for creating one.
 Only `GET /api/v1` (the catalog) and `GET /api/v1/openapi` are public metadata, so a new
 caller can discover how to get a key.
@@ -126,7 +126,7 @@ export is also **bounded**: see [Record-exposure limits](#record-exposure-limits
 
 ### Record-exposure limits
 
-Request quotas are not the protection against rebuilding the database — this is. Every key is
+Request quotas are not the protection against rebuilding the database, this is. Every key is
 metered on **unique records delivered per customer account per calendar month**, counted
 separately for jobs, employers, event rows and ad texts.
 
@@ -223,7 +223,7 @@ concurrency limit or the anti-harvesting detector is hit the API returns `429` w
 | GET | `/market/salary` | Salary breakdown by category/occupation/county: median, p25/p75, min/max, distribution | Market |
 | GET | `/market/history` | Point-in-time market history: active + new jobs per day | Market |
 | GET | `/market/timetofill` | Time-to-fill from measured intervals, by category and county | Market |
-| GET | `/recruitment` | Employer recruitment patterns (six explainable signals → persistence score, with per-employer evidence). The model's own weights are not returned. Metered on unique employers | **Business** |
+| GET | `/recruitment` | Employer recruitment patterns (six explainable signals, persistence score, with per-employer evidence). The model's own weights are not returned. Metered on unique employers | **Business** |
 | GET | `/recruitment/audit` | Algorithm validation: drift check + signal distributions | **Business** |
 | GET/POST | `/watchlists` | List / create saved searches (scoped to your key) | Core |
 | GET/DELETE | `/watchlists/{id}` | New jobs since last check / delete a saved search. Another key's watchlist returns `404` | Core |
@@ -317,15 +317,15 @@ headers are `ETag`, `X-Plan`, `X-Quota-*`, `X-Daily-*`, `X-Export-*` and `Retry-
 - **Time-to-fill** — observed ad lifetime in days (published → now for open ads,
   published → last seen for closed ads). It measures how long ads stay listed, not an
   employer-reported fill date.
-- **Recruitment `persistenceScore`** — 0–100 employer score from six weighted signals:
+- **Recruitment `persistenceScore`** 0–100 employer score from six weighted signals:
   repost .25, duration .20, similarity .15, reactivation .15, frequency .15, duplicate .10
   (`recruit-1.1.6`).
-- **`aiMentions` / the KI metric** — counts ads whose **own text** (title or description)
+- **`aiMentions` / the KI metric** counts ads whose **own text** (title or description)
   mentions AI/KI terms (KI, AI, kunstig intelligens, maskinlæring, GPT, LLM, Claude, Copilot,
   generativ, prompt, chatbot, språkmodell, nevralt nettverk). It is a **detector of term
   mentions in the ad text**. It is **not** an AI-authorship signal, and must not be used or
   described as one.
-- **History depth** — collection started 2026-08-11. Snapshots, the event log and daily
+- **History depth** collection started 2026-08-11. Snapshots, the event log and daily
   statistics begin there; `publishedAt` on collected ads goes back to 2019. `/market/history`
   serves up to 120 days.
 
