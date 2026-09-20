@@ -1,6 +1,6 @@
 # fakt API
 
-Public API for Norwegian labour-market data — job ads, employers, salary, recruitment patterns and market insights.
+Public API for Norwegian labour-market data, job ads, employers, salary, recruitment patterns and market insights.
 
 > fakt continuously observes the official **NAV Arbeidsplassen** feed for job postings and builds history over time. Data is combined with **SSB** (salary / income) and the **Brønnøysundregistrene** (company registry). All figures are **observed**, not self-reported.
 
@@ -47,7 +47,7 @@ curl -H "X-API-Key: YOUR_API_KEY_HERE" \
 ```
 </details>
 
-> **`YOUR_API_KEY_HERE` is a placeholder.** Replace it with a real key from your dashboard. Every request needs a key — there is no anonymous access.
+> **`YOUR_API_KEY_HERE` is a placeholder.** Replace it with a real key from your dashboard. Every request needs a key, there is no anonymous access.
 
 ---
 
@@ -81,7 +81,7 @@ curl -i "https://fakt.no/api/v1/jobs?q=sykepleier&limit=5"
 
 ## Getting started
 
-1. **Get a key** (required — free, no payment details): create one from [fakt.no/dashboard/innstillinger](https://fakt.no/dashboard/innstillinger).
+1. **Get a key** (required, free, no payment details): create one from [fakt.no/dashboard/innstillinger](https://fakt.no/dashboard/innstillinger).
 2. **Call an endpoint** with `curl` (or any HTTP client) against `https://fakt.no/api/v1`.
 3. **Check your quota** at any time with [`GET /usage`](#endpoints).
 4. **Generate a client** from [`openapi.yaml`](./openapi.yaml) if you want typed SDKs.
@@ -133,7 +133,7 @@ separately for jobs, employers, event rows and ad texts.
 * **Shared by the account.** All API keys belonging to one customer share one budget. Creating
   more keys does **not** add allowance.
 * **Already-delivered records are free.** Re-requesting a record the account has already
-  received consumes nothing — the budget measures how much of the corpus the account has seen,
+  received consumes nothing, the budget measures how much of the corpus the account has seen,
   not how many requests it made.
 * **Aggregates are not metered.** Market, salary, recruitment, time-to-fill and every other
   derived/intelligence endpoint has no record budget.
@@ -178,9 +178,9 @@ it does not make copying impossible.
 
 ### Harvesting detection
 
-Walking the whole dataset in a systematic way — very long cursor walks, sweeping one filter
+Walking the whole dataset in a systematic way, very long cursor walks, sweeping one filter
 dimension, repeating one broad query, many overlapping queries or unusually high budget
-pressure — is detected. Several independent signals must co-occur before the account is
+pressure, is detected. Several independent signals must co-occur before the account is
 throttled for 15 minutes with
 `429 {"code":"enumeration_suspected","signals":[...],"retryAfterSeconds":900}`. A single signal
 never affects a normal customer, this is never a ban, and every event is recorded.
@@ -189,13 +189,13 @@ never affects a normal customer, this is never a ban, and every event is recorde
 
 - **Core** — `/jobs`, `/employers`, `/events`, `/watchlists`, `/status`, `/changelog`
   (available to every plan, starting with Free)
-- **Market** — salary and market analytics (`/market`, `/market/salary`, `/market/history`,
+- **Market**, salary and market analytics (`/market`, `/market/salary`, `/market/history`,
   `/market/timetofill`) and Fakt's model salary estimate (`salaryEstimatedMin/Median/Max`,
   `salaryBenchmark`) on `/jobs/{id}`. The *advertised* salary of an individual ad is Core: it is
   returned by `/jobs` and `/jobs/{id}` on every plan.
-- **Recruitment** — employer recruitment analytics (`/recruitment`, `/recruitment/audit`, and
+- **Recruitment**, employer recruitment analytics (`/recruitment`, `/recruitment/audit`, and
   the `recruitment` block of `/employers/{name}`)
-- **Exports** — bounded bulk export (`/export/*`), NDJSON or CSV. Self-service: max 1000 rows per
+- **Exports**, bounded bulk export (`/export/*`), NDJSON or CSV. Self-service: max 1000 rows per
   request, `?updatedSince=` required for `/export/jobs`, `include=description` requires a data
   licence. Unrestricted full-dataset export is the separately licensed Enterprise product.
 
